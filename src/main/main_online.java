@@ -47,8 +47,8 @@ public class main_online extends main {
 
         //todo popularity用在哪里了???，注销了也没什么影响呀
         //todo 是MostPopular的推荐算法？？？貌似是的。。。
-//        ItemPopularity popularity = new ItemPopularity(trainMatrix, testRatings, topK, threadNum);
-//        evaluate_model_online(popularity, "Popularity", interval);
+        ItemPopularity popularity = new ItemPopularity(trainMatrix, testRatings, topK, threadNum);
+        evaluate_model_online(popularity, "Popularity", interval);
 
         double init_mean = 0;
         double init_stdev = 0.01;

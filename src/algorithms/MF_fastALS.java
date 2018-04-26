@@ -187,7 +187,6 @@ public class MF_fastALS extends TopKRecommender {
 
     protected void update_user(int u) {
         //获取u在trainMatrix的行中非零项
-        System.out.println(trainMatrix.getRowRef(u));
         ArrayList<Integer> itemList = trainMatrix.getRowRef(u).indexList();
         if (itemList.size() == 0) return;    // user has no ratings
         // prediction cache for the user =>为什么这个要抽出来放在前面，放在下面的foreach in itemList中不行吗？

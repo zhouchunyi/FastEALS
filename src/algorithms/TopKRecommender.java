@@ -113,9 +113,10 @@ public abstract class TopKRecommender {
 
     /**
      * Online evaluation (global split) by simulating the testing stream.
+     * todo 在这里加一些测试
      *
-     * @param ratings  Test ratings that are sorted by time (old -> recent).
-     * @param interval Print evaluation result per X iteration.
+     * @param testRatings Test ratings that are sorted by time (old -> recent).
+     * @param interval    Print evaluation result per X iteration.
      */
     public void evaluateOnline(ArrayList<Rating> testRatings, int interval) {
         int testCount = testRatings.size();
