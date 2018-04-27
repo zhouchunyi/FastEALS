@@ -25,6 +25,11 @@ import java.util.Map;
  */
 public abstract class TopKRecommender {
     /**
+     * Name of this current
+     */
+    public String method_name;
+
+    /**
      * The number of users.
      */
     public int userCount;
@@ -61,12 +66,14 @@ public abstract class TopKRecommender {
     public boolean ignoreTrain = false; // ignore train items when generating topK list
 
     public TopKRecommender() {
+        //子类会变更至自己的类名
+        method_name = getClass().getName();
     }
 
-    ;
 
     public TopKRecommender(SparseMatrix trainMatrix,
                            ArrayList<Rating> testRatings, int topK, int threadNum) {
+        this();
         this.trainMatrix = new SparseMatrix(trainMatrix);
         this.testRatings = new ArrayList<Rating>(testRatings);
         this.topK = topK;

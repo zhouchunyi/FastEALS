@@ -211,7 +211,6 @@ public abstract class main {
     /**
      * Generate a smaller dataset.
      *
-     * @param threshold
      * @throws IOException
      */
     public static void FilterRatingsWithThreshold(String ratingFile,

@@ -2,6 +2,7 @@ package main;
 
 import algorithms.ItemPopularity;
 import algorithms.MF_fastALS;
+import algorithms.MF_fastALS_WRMF;
 import algorithms.TopKRecommender;
 import data_structure.Rating;
 import data_structure.SparseMatrix;
@@ -219,13 +220,13 @@ public abstract class main_XiamiOnline {
         String dataset_testFolderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\最近听歌记录_排序\\FixedSplitResults_filtered\\splitBy2018-03-06_onlyrecent\\test_测试";
 
 
-        String method = "FastALS";
+        String method = "FastALS_WRMF";
         int interval = 100;
-        double w0 = 512;
+        double c0 = 512;
         int factors = 64;
         int maxIter = 50;
         int maxIterOnline = 1;
-        double alpha = 0.4;
+        float alpha = 0.4f;
         String onlineMode = "ui";
         double w_new = 1;
 
@@ -235,11 +236,11 @@ public abstract class main_XiamiOnline {
             dataset_testFolderPath = argv[1];
             method = argv[2];
             interval = Integer.parseInt(argv[3]);
-            w0 = Double.parseDouble(argv[4]);
+            c0 = Double.parseDouble(argv[4]);
             factors = Integer.parseInt(argv[5]);
             maxIter = Integer.parseInt(argv[6]);
             maxIterOnline = Integer.parseInt(argv[7]);
-            alpha = Double.parseDouble(argv[8]);
+            alpha = Float.parseFloat(argv[8]);
             if (argv.length >= 10) onlineMode = argv[9];
             if (argv.length >= 11) w_new = Double.parseDouble(argv[10]);
         }
@@ -257,16 +258,29 @@ public abstract class main_XiamiOnline {
         boolean showProgress = false;
         boolean showLoss = false;
 
-        if (method.equalsIgnoreCase("fastals")) {
-            MF_fastALS fals = new MF_fastALS(trainMatrix, testRatings, topK, threadNum,
-                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
-            fals.w_new = w_new;
+//        if (method.equalsIgnoreCase("fastals")) {
+//            MF_fastALS fals = new MF_fastALS(trainMatrix, testRatings, topK, threadNum,
+//                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
+//            fals.w_new = w_new;
+//            long start = System.currentTimeMillis();
+//            System.out.println("train start!");
+//            fals.buildModel();
+//            System.out.println("train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
+//            fals.maxIterOnline = maxIterOnline;
+//            evaluate_model_online(fals, "MF_fastALS", interval);
+//        }
+        if (method.equalsIgnoreCase("fastals_wrmf")) {
+//            MF_fastALS fals = new MF_fastALS(trainMatrix, testRatings, topK, threadNum,
+//                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
+            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRatings, topK, threadNum, factors, maxIter, c0,
+                    alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
+            fals_wrmf.w_new = w_new;
             long start = System.currentTimeMillis();
             System.out.println("train start!");
-            fals.buildModel();
+            fals_wrmf.buildModel();
             System.out.println("train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
-            fals.maxIterOnline = maxIterOnline;
-            evaluate_model_online(fals, "MF_fastALS", interval);
+            fals_wrmf.maxIterOnline = maxIterOnline;
+            evaluate_model_online(fals_wrmf, fals_wrmf.method_name, interval);
         }
     }
 
