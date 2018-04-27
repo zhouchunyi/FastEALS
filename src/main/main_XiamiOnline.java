@@ -22,7 +22,7 @@ import java.util.*;
  * todo test中的user和item都是train中出现过的
  * Created by zcy on 2018/4/25.
  */
-public abstract class main_XiamiOnline {
+public class main_XiamiOnline {
     /***********************Data Structures*********************************/
     /**
      * Rating matrix for training.
@@ -270,8 +270,6 @@ public abstract class main_XiamiOnline {
 //            evaluate_model_online(fals, "MF_fastALS", interval);
 //        }
         if (method.equalsIgnoreCase("fastals_wrmf")) {
-//            MF_fastALS fals = new MF_fastALS(trainMatrix, testRatings, topK, threadNum,
-//                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
             MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRatings, topK, threadNum, factors, maxIter, c0,
                     alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
             fals_wrmf.w_new = w_new;
