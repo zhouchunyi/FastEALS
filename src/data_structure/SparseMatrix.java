@@ -247,13 +247,13 @@ public class SparseMatrix implements Serializable {
      * @param default_value The default average of a row if it has no values.
      * @return A SparseVector that each value denotes the average of the row vector.
      **/
-    public SparseVector getRowAverage(double defalut_value) {
+    public SparseVector getRowAverage(double default_value) {
         SparseVector rowAverage = new SparseVector(this.M);
         for (int u = 0; u < this.M; u++) {
             SparseVector v = this.getRowRef(u);
             double avg = v.average();
             if (Double.isNaN(avg)) { // no rate is available: set it as median value.
-                avg = defalut_value;
+                avg = default_value;
             }
             rowAverage.setValue(u, avg);
         }
@@ -266,13 +266,13 @@ public class SparseMatrix implements Serializable {
      * @param default_value The default average of a column if it has no values.
      * @return A SparseVector that each value denotes the average of the column vector.
      */
-    public SparseVector getColumnAverage(double defalut_value) {
+    public SparseVector getColumnAverage(double default_value) {
         SparseVector columnAverage = new SparseVector(this.N);
         for (int i = 0; i < this.N; i++) {
             SparseVector j = this.getColRef(i);
             double avg = j.average();
             if (Double.isNaN(avg)) { // no rate is available: set it as median value.
-                avg = defalut_value;
+                avg = default_value;
             }
             columnAverage.setValue(i, avg);
         }
@@ -280,7 +280,7 @@ public class SparseMatrix implements Serializable {
     }
 
 	/*========================================
-	 * Properties
+     * Properties
 	 *========================================*/
 
     /**
@@ -489,9 +489,9 @@ public class SparseMatrix implements Serializable {
         }
         return pairs;
     }
-	
+
 	/*========================================
-	 * Matrix operations
+     * Matrix operations
 	 *========================================*/
 
     /**
@@ -926,8 +926,8 @@ public class SparseMatrix implements Serializable {
      * Generate a uniform matrix with the given size.
      * The sum of each row is 1.
      *
-     * @param m
-     * @param n
+     * @param M
+     * @param N
      * @return
      */
     public static SparseMatrix makeUniform(int M, int N) {
