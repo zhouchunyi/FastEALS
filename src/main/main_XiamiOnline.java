@@ -222,7 +222,7 @@ public class main_XiamiOnline {
 
         String method = "FastALS_WRMF";
         int interval = 100;
-        double c0 = 512;
+        double c0 = 512;//128
         int factors = 64;
         int maxIter = 50;
         int maxIterOnline = 1;

@@ -328,6 +328,9 @@ public class MF_fastALS extends TopKRecommender {
 
     @Override
     public double predict(int u, int i) {
+        /**
+         * u_i*v_j
+         */
         return U.row(u, false).inner(V.row(i, false));
     }
 

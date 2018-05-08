@@ -25,7 +25,7 @@ import java.util.Map;
  */
 public abstract class TopKRecommender {
     /**
-     * Name of this current
+     * Name of this current method
      */
     public String method_name;
 
@@ -222,7 +222,7 @@ public abstract class TopKRecommender {
     }
 
     /**
-     * Evaluation for a specific user with given GT item.
+     * Evaluation for a specific user with given GroundTruth item.
      *
      * @return: result[0]: hit ratio
      * result[1]: ndcg
@@ -308,7 +308,6 @@ public abstract class TopKRecommender {
     public void setUV(DenseMatrix U, DenseMatrix V) {
     }
 
-    ;
 }
 
 // Thread for running the offline evaluation.
