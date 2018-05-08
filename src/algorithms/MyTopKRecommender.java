@@ -36,7 +36,7 @@
 //    /**
 //     * Test ratings. For showing progress only.
 //     */
-//    public ArrayList<Rating> testRatings;
+//    public ArrayList<Rating> testRecords;
 //
 //    /**
 //     * Position to cutoff.
@@ -66,10 +66,10 @@
 //
 //
 //    public MyTopKRecommender(SparseMatrix trainMatrix,
-//                             ArrayList<Rating> testRatings, int topK, int threadNum) {
+//                             ArrayList<Rating> testRecords, int topK, int threadNum) {
 //        this();
 //        this.trainMatrix = new SparseMatrix(trainMatrix);
-//        this.testRatings = new ArrayList<Rating>(testRatings);
+//        this.testRecords = new ArrayList<Rating>(testRecords);
 //        this.topK = topK;
 //        this.threadNum = threadNum;
 //
@@ -99,12 +99,12 @@
 //     * @start Starting time of the iteration
 //     * @testMatrix For evaluation purpose
 //     */
-//    public void showProgress(int iter, long start, ArrayList<Rating> testRatings) {
+//    public void showProgress(int iter, long start, ArrayList<Rating> testRecords) {
 //        long end_iter = System.currentTimeMillis();
-//        if (userCount == testRatings.size())  // leave-1-out eval
-//            evaluate(testRatings);
+//        if (userCount == testRecords.size())  // leave-1-out eval
+//            evaluate(testRecords);
 //        else    // global split
-//            evaluateOnline(testRatings, 100);
+//            evaluateOnline(testRecords, 100);
 //        long end_eval = System.currentTimeMillis();
 //
 //        System.out.printf("Iter=%d[%s]: loss\t%.4f", iter, Printer.printTime(end_iter - start), loss());
@@ -123,6 +123,7 @@
 //     * @param evaluator_names 以逗号分隔
 //     */
 //    public void setEvaluators(String evaluator_names) {
+//        String[] eval_names = evaluator_names.split(",");
 //
 //    }
 //
@@ -130,11 +131,11 @@
 //     * Online evaluation (global split) by simulating the testing stream.
 //     * todo 在这里加一些测试
 //     *
-//     * @param testRatings Test ratings that are sorted by time (old -> recent).
+//     * @param testRecords Test ratings that are sorted by time (old -> recent).
 //     * @param interval    Print evaluation result per X iteration.
 //     */
-//    public void evaluateOnline(ArrayList<Rating> testRatings, int interval) {
-//        int testCount = testRatings.size();
+//    public void evaluateOnline(ArrayList<Rating> testRecords, int interval) {
+//        int testCount = testRecords.size();
 //
 ////        hits = new DenseVector(testCount);
 ////        ndcgs = new DenseVector(testCount);
@@ -155,7 +156,7 @@
 //                        i, hits.sum() / i, ndcgs.sum() / i, precs.sum() / i);
 //            }
 //            // Evaluate model of the current test rating:
-//            Rating rating = testRatings.get(i);
+//            Rating rating = testRecords.get(i);
 //            double[] res = this.evaluate_for_user(rating.userId, rating.itemId);
 //            hits.set(i, res[0]);
 //            ndcgs.set(i, res[1]);
@@ -199,10 +200,10 @@
 //    /**
 //     * Offline evaluation (leave-1-out) for each user.
 //     */
-//    public void evaluate(ArrayList<Rating> testRatings) {
-//        assert userCount == testRatings.size();
+//    public void evaluate(ArrayList<Rating> testRecords) {
+//        assert userCount == testRecords.size();
 //        for (int u = 0; u < userCount; u++)
-//            assert u == testRatings.get(u).userId;
+//            assert u == testRecords.get(u).userId;
 //
 //        hits = new DenseVector(userCount);
 //        ndcgs = new DenseVector(userCount);
@@ -212,7 +213,7 @@
 //        MyEvaluationThread[] threads = new MyEvaluationThread[threadNum];
 //        for (int t = 0; t < threadNum; t++) {
 //            ArrayList<Integer> users = threadSplit(userCount, threadNum, t);
-//            threads[t] = new MyEvaluationThread(this, testRatings, users);
+//            threads[t] = new MyEvaluationThread(this, testRecords, users);
 //            threads[t].start();
 //        }
 //
@@ -318,19 +319,19 @@
 //
 //class MyEvaluationThread extends Thread {
 //    MyTopKRecommender model;
-//    ArrayList<Rating> testRatings;
+//    ArrayList<Rating> testRecords;
 //    ArrayList<Integer> users;
 //
-//    public MyEvaluationThread(MyTopKRecommender model, ArrayList<Rating> testRatings,
+//    public MyEvaluationThread(MyTopKRecommender model, ArrayList<Rating> testRecords,
 //                              ArrayList<Integer> users) {
 //        this.model = model;
-//        this.testRatings = testRatings;
+//        this.testRecords = testRecords;
 //        this.users = users;
 //    }
 //
 //    public void run() {
 //        for (int u : users) {
-//            double[] res = model.evaluate_for_user(u, testRatings.get(u).itemId);
+//            double[] res = model.evaluate_for_user(u, testRecords.get(u).itemId);
 //            model.hits.set(u, res[0]);
 //            model.ndcgs.set(u, res[1]);
 //            model.precs.set(u, res[2]);

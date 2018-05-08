@@ -1,7 +1,6 @@
 package main;
 
 import algorithms.ItemPopularity;
-import algorithms.MF_fastALS;
 import algorithms.MF_fastALS_WRMF;
 import algorithms.TopKRecommender;
 import data_structure.Rating;
@@ -30,13 +29,14 @@ public class main_XiamiOnline {
     public static SparseMatrix trainMatrix;
 
     /**
-     * Test ratings (sorted by time).
+     * Test records (sorted by time).
+     * 仍利用Rating数据结构，但在Xiami中为record
      */
-    public static ArrayList<Rating> testRatings;//Rating: <userId, itemId, score, timestamp>
+    public static ArrayList<Rating> testRecords;//Rating: <userId, itemId, score, timestamp>
     /**
      * newUser indices list in test ratings
      */
-    public static ArrayList<Integer> newUserIdxList;
+    public static ArrayList<Integer> newUserIdxList;//size = newUserCount
     /**
      * 用于存储xiami中String类型的id和int类型的index的转换
      * index对应了Matrix的位置
@@ -48,17 +48,16 @@ public class main_XiamiOnline {
      * xiami数据时间戳格式
      */
     public final static SimpleDateFormat STD_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd hh:mm");
-
-    public static int topK = 100;
-    public static int threadNum = 10;
     //train+test的数量
-    public static int userCount;
-    public static int itemCount;
-    //train的数量
-    public static int trainUserCount;
+    public static int userCount, itemCount;
+    //用户数量分布
+    public static int trainUserCount, testUserCount;
     //用于从test中挑选newUser的随机数
     public static int randomSeed = 1;
     private static Random newUserRandom;
+
+    public static int topK = 100;
+    public static int threadNum = 10;
 
 
     /**
@@ -77,7 +76,6 @@ public class main_XiamiOnline {
      */
     public static void readAndConvertRecords(String trainTripleFilePath, String testFolderPath, boolean needNewUser, double newUserRatio) throws IOException, ParseException {
         userCount = itemCount = 0;
-        trainUserCount = 0;
 
         File trainTripleFile = new File(trainTripleFilePath);
         File testFolder = new File(testFolderPath);
@@ -86,7 +84,7 @@ public class main_XiamiOnline {
             return;
         }
 
-        long start, functionStart = System.currentTimeMillis();
+        long start;
 
         BufferedReader reader;
         String line;
@@ -107,6 +105,7 @@ public class main_XiamiOnline {
             trainList.add(rating);
         }
         trainUserCount = convertor.getUserNum();
+//        System.out.println("after reading trainFile, trainUserCount = " + trainUserCount);
         System.out.println("Reading trainFile costs :" + Printer.printTime(System.currentTimeMillis() - start));
 
         String userId;
@@ -115,7 +114,7 @@ public class main_XiamiOnline {
          *  记录所有出现在test中的用户index
          *  用于随机挑选newUser
          */
-        testRatings = new ArrayList<>();
+        testRecords = new ArrayList<>();
         //todo
         ArrayList<Integer> testUserIdxList = new ArrayList<>();
         //build test
@@ -143,16 +142,17 @@ public class main_XiamiOnline {
                 timestamp = STD_DATE_FORMAT.parse(splitRes[0]).getTime();
                 itemIdx = convertor.putItem(splitRes[1]);
                 Rating rating = new Rating(userIdx, itemIdx, 1, timestamp);
-                testRatings.add(rating);
+                testRecords.add(rating);
             }
         }
-        System.out.println("Reading testFile costs:\t" + Printer.printTime(System.currentTimeMillis() - start));
+//        System.out.println("Reading testFile costs:\t" + Printer.printTime(System.currentTimeMillis() - start));
 
         //在此处构建trainMatrix为了防止test中有train中没有的user
         //此方法为静态matrix，因此train中仍为new user保留行
         userCount = convertor.getUserNum();
         itemCount = convertor.getItemNum();
         trainMatrix = new SparseMatrix(userCount, itemCount);
+//        System.out.println("after reading train + test\t userCount = " + userCount + ",\titemCount = " + itemCount);
 
         for (Rating rating : trainList) {
             trainMatrix.setValue(rating.userId, rating.itemId, rating.score);
@@ -169,9 +169,13 @@ public class main_XiamiOnline {
         };
         System.out.println("Sorting test ratings!");
 
-        Collections.sort(testRatings, c);
+        Collections.sort(testRecords, c);
         System.out.println("Sorting cost:" + Printer.printTime(System.currentTimeMillis() - start));
 
+        /**
+         * *************构建新用户****************
+         * 保证newUser在testUser中占比为newUserRatio
+         */
         if (needNewUser) {
             int testUserNum = testUserIdxList.size();
 
@@ -181,7 +185,7 @@ public class main_XiamiOnline {
 
             System.out.println("Need NewUser, newUserRatio = " + newUserRatio);
             System.out.println("Now, testUserNum = " + testUserNum + ", the goal of NewUserNum = " + goalNewUserNum);
-            System.out.println("Before choosing NewUser from test, #Ratings in Train\t" + (int) trainMatrix.sum());
+            System.out.println("Before choosing NewUser from test, #Records in Train\t" + (int) trainMatrix.sum());
 
             goalNewUserNum -= newUserIdxList.size();//当前我们需要生成的新用户
             /**
@@ -195,33 +199,37 @@ public class main_XiamiOnline {
             int chosenUIdx;
             while (goalNewUserNum > 0) {
                 chosenUIdx = testUserIdxList.get(newUserRandom.nextInt(testUserNum));//random.nextInt(bound): [0,bound)
-                System.out.println("random choose:" + chosenUIdx);
+//                System.out.println("random choose:" + chosenUIdx);
                 if (newUserIdxList.contains(chosenUIdx))//这个user已经是new的
                     continue;
                 trainMatrix.setRowVector(chosenUIdx, zeroVector);
                 newUserIdxList.add(chosenUIdx);
-                trainUserCount++;
                 goalNewUserNum--;
             }
         }
 
-
+        //之前的计算有误
+        trainUserCount = userCount - newUserIdxList.size();
+        testUserCount = testUserIdxList.size();
         // Print some basic statistics of the dataset.
         System.out.println("Data:\ttrainFile\t" + trainTripleFilePath + "\ttestFile\t" + testFolderPath);
-        System.out.println("#trainUserNum\t" + trainUserCount + " ,#testUserNum\t" + testUserIdxList.size() + ", #newUser_in_test\t" + newUserIdxList.size());
-        System.out.println("#Users\t" + userCount);
-        System.out.println("#Items\t" + itemCount);
-        System.out.printf("#Ratings\t %d (train), %d(test)\n", (int) trainMatrix.sum(), testRatings.size());
+        System.out.println("#trainUserNum\t" + trainUserCount + " ,#testUserNum\t" + testUserCount + ", #newUser_in_test\t" + newUserIdxList.size());
+        System.out.println("#TotalUsers\t" + userCount);
+        System.out.println("#TotalItems\t" + itemCount);
+        System.out.println("#TotalTrainPlayCount\t" + (int) trainMatrix.sum());
+        System.out.println("#OnlineTestRecord\t" + testRecords.size());
     }
 
 
     public static void main(String[] argv) throws IOException, ParseException {
-        String dataset_trainFilePath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\最近听歌记录_排序\\FixedSplitResults_filtered\\splitBy2018-03-06_onlyrecent\\trainPair_测试.txt";
-        String dataset_testFolderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\最近听歌记录_排序\\FixedSplitResults_filtered\\splitBy2018-03-06_onlyrecent\\test_测试";
+//        String dataset_trainFilePath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\最近听歌记录_排序\\FixedSplitResults_filtered\\splitBy2018-03-06_onlyrecent\\trainPair_测试.txt";
+//        String dataset_testFolderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\最近听歌记录_排序\\FixedSplitResults_filtered\\splitBy2018-03-06_onlyrecent\\test_测试";
+        String dataset_trainFilePath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\最近听歌记录_排序\\FixedSplitResults_filtered\\splitBy2018-03-06_onlyrecent\\trainPair_0306.txt";
+        String dataset_testFolderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\最近听歌记录_排序\\FixedSplitResults_filtered\\splitBy2018-03-06_onlyrecent\\test_filterByTrain";
 
 
         String method = "FastALS_WRMF";
-        int interval = 100;
+        int interval = 1000;
         double c0 = 512;//128
         int factors = 64;
         int maxIter = 50;
@@ -245,11 +253,9 @@ public class main_XiamiOnline {
             if (argv.length >= 11) w_new = Double.parseDouble(argv[10]);
         }
 
-
-//        readAndConvertRecords(dataset_trainFilePath, dataset_testFolderPath, false, 0);
         readAndConvertRecords(dataset_trainFilePath, dataset_testFolderPath, true, 0.1);
 
-        ItemPopularity popularity = new ItemPopularity(trainMatrix, testRatings, topK, threadNum);
+        ItemPopularity popularity = new ItemPopularity(trainMatrix, testRecords, topK, threadNum);
         evaluate_model_online(popularity, "Popularity", interval);//import from main.java
 
         double init_mean = 0;
@@ -259,7 +265,7 @@ public class main_XiamiOnline {
         boolean showLoss = false;
 
 //        if (method.equalsIgnoreCase("fastals")) {
-//            MF_fastALS fals = new MF_fastALS(trainMatrix, testRatings, topK, threadNum,
+//            MF_fastALS fals = new MF_fastALS(trainMatrix, testRecords, topK, threadNum,
 //                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
 //            fals.w_new = w_new;
 //            long start = System.currentTimeMillis();
@@ -270,11 +276,11 @@ public class main_XiamiOnline {
 //            evaluate_model_online(fals, "MF_fastALS", interval);
 //        }
         if (method.equalsIgnoreCase("fastals_wrmf")) {
-            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRatings, topK, threadNum, factors, maxIter, c0,
+            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, topK, threadNum, factors, maxIter, c0,
                     alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
             fals_wrmf.w_new = w_new;
             long start = System.currentTimeMillis();
-            System.out.println("train start!");
+            System.out.println("fastals_wrmf train start!");
             fals_wrmf.buildModel();
             System.out.println("train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
             fals_wrmf.maxIterOnline = maxIterOnline;
@@ -284,8 +290,9 @@ public class main_XiamiOnline {
 
 
     private static void evaluate_model_online(TopKRecommender model, String name, int interval) {
+//        System.out.println("evaluate online!");
         long start = System.currentTimeMillis();
-        model.evaluateOnline(testRatings, interval);
+        model.evaluateOnline(testRecords, interval);
         System.out.printf("%s\t <hr, ndcg, prec>:\t %.4f\t %.4f\t %.4f [%s]\n",
                 name, model.hits.mean(), model.ndcgs.mean(), model.precs.mean(),
                 Printer.printTime(System.currentTimeMillis() - start));
