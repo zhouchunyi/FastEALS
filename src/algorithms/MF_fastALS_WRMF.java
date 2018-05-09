@@ -361,7 +361,7 @@ public class MF_fastALS_WRMF extends TopKRecommender {
     public double showLoss(int iter, long start, double loss_pre) {
         long start1 = System.currentTimeMillis();
         double loss_cur = loss();
-        String symbol = loss_pre >= loss_cur ? "-" : "+";
+        String symbol = loss_pre >= loss_cur ? "-" : "+";//与之前比loss是否下降
         System.out.printf("Iter=%d [%s]\t [%s]loss: %.4f [%s]\n", iter,
                 Printer.printTime(start1 - start), symbol, loss_cur,
                 Printer.printTime(System.currentTimeMillis() - start1));
@@ -412,6 +412,10 @@ public class MF_fastALS_WRMF extends TopKRecommender {
 
             update_item(i);
         }
+    }
+
+    public void showParams() {
+        System.out.println("factors=" + factors + ",\tregUser=regItem=" + regUser + ",\talpha=" + alpha + ",\tmaxIter=" + maxIter + ",\tmaxOnlineIter=" + maxIterOnline);
     }
 
 /*	// Raw way to calculate the loss function

@@ -54,6 +54,8 @@
 ////    public DenseVector ndcgs;
 ////    public DenseVector precs;
 //    public Map<String, DenseVector> evaluatorMap;
+//    public String evaluators = "hit,ndcg,precision";
+//
 //    public int maxIterOnline = 1;
 //
 //    public boolean ignoreTrain = false; // ignore train items when generating topK list
@@ -117,14 +119,13 @@
 ////                hits.mean(), ndcgs.mean(), precs.mean(), Printer.printTime(end_eval - end_iter));
 //    }
 //
-//    /**
-//     * 设置当前recommender需要哪些evaluators
-//     *
-//     * @param evaluator_names 以逗号分隔
-//     */
-//    public void setEvaluators(String evaluator_names) {
-//        String[] eval_names = evaluator_names.split(",");
-//
+//    private void initEvaluator(int testCount) {
+//        String[] eval_names = evaluators.split(",");
+//        for (int i = 0; i < eval_names.length; i++) {
+//            if (eval_names[i].trim().equalsIgnoreCase("hit")) {
+//                evaluatorMap.put("hit", new DenseVector(testCount));
+//            }
+//        }
 //    }
 //
 //    /**

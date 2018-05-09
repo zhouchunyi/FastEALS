@@ -2,6 +2,7 @@ import utils.IdIndexConvertor;
 
 import java.io.*;
 import java.text.DecimalFormat;
+import java.util.Date;
 
 /**
  * Created by zcy on 2018/4/25.
@@ -20,11 +21,12 @@ public class Test {
 //        System.out.println(convertor.putUser("hello"));
 //        System.out.println(convertor.putUser("hello"));
 //        System.out.println(convertor.getItemIdByIndex(2));
-
-        int testUserNum = 166666;
-        double newUserRatio = 0.1;
-        DecimalFormat df = new DecimalFormat("##0");
-//        int goalNewUserNum = df.format(testUserNum * newUserRatio);
-        System.out.println(df.format(testUserNum * newUserRatio));
+//
+//        int testUserNum = 166666;
+//        double newUserRatio = 0.1;
+//        DecimalFormat df = new DecimalFormat("##0");
+////        int goalNewUserNum = df.format(testUserNum * newUserRatio);
+//        System.out.println(df.format(testUserNum * newUserRatio));
+        System.out.println(new Date());
     }
 }

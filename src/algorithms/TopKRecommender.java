@@ -1,10 +1,6 @@
 package algorithms;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
 import utils.CommonUtils;
 import utils.Printer;
@@ -13,8 +9,6 @@ import data_structure.Rating;
 import data_structure.SparseMatrix;
 import data_structure.DenseMatrix;
 import utils.TopKPriorityQueue;
-
-import java.util.Map;
 
 /**
  * This is an abstract class for topK recommender systems.
@@ -63,7 +57,11 @@ public abstract class TopKRecommender {
     public DenseVector precs;
     public int maxIterOnline = 1;
 
-    public boolean ignoreTrain = false; // ignore train items when generating topK list
+    /**
+     * ignore train items when generating topK list
+     * 忽略的是某user已经观察过的item，即不重复推荐
+     */
+    public boolean ignoreTrain = false;
 
     public TopKRecommender() {
         //子类会变更至自己的类名
@@ -113,7 +111,7 @@ public abstract class TopKRecommender {
             evaluateOnline(testRatings, 100);
         long end_eval = System.currentTimeMillis();
 
-        System.out.printf("Iter=%d[%s] <loss, hr, ndcg, prec>:\t %.4f\t %.4f\t %.4f\t %.4f\t [%s]\n",
+        System.out.printf(new Date() + "\tIter=%d[%s] <loss, hr, ndcg, prec>:\t %.4f\t %.4f\t %.4f\t %.4f\t [%s]\n",
                 iter, Printer.printTime(end_iter - start), loss(),
                 hits.mean(), ndcgs.mean(), precs.mean(), Printer.printTime(end_eval - end_iter));
     }
@@ -123,26 +121,32 @@ public abstract class TopKRecommender {
      * todo 在这里加一些测试
      *
      * @param testRatings Test ratings that are sorted by time (old -> recent).
-     * @param interval    Print evaluation result per X iteration.
+     * @param interval    Print evaluation result per 'interval' iteration.
      */
     public void evaluateOnline(ArrayList<Rating> testRatings, int interval) {
         int testCount = testRatings.size();
+        //记录每一条test的评价结果
         hits = new DenseVector(testCount);
         ndcgs = new DenseVector(testCount);
         precs = new DenseVector(testCount);
 
         // break down the results by number of user ratings of the test pair
-        int intervals = 10;
+        /**
+         *在每轮测试后，根据该user在trainMatrix的非零项数量break down
+         */
+        int intervals = 10;//考虑到xiami，我们采用intervals*100
         int[] counts = new int[intervals + 1];
         double[] hits_r = new double[intervals + 1];
         double[] ndcgs_r = new double[intervals + 1];
         double[] precs_r = new double[intervals + 1];
+        int times = 100;//todo 新增，应该和item数量相关
 
         Long updateTime = (long) 0;
-        for (int i = 0; i < testCount; i++) {
+        for (int i = 0; i < testCount; i++) {//逐条测试
             // Check performance per interval:
             if (i > 0 && interval > 0 && i % interval == 0) {
-                System.out.printf("%d: <hr, ndcg, prec> =\t %.4f\t %.4f\t %.4f\n",
+                //每个interval轮输出一次评价指标
+                System.out.printf(new Date() + "\t%d: <hr, ndcg, prec> =\t %.4f\t %.4f\t %.4f\n",
                         i, hits.sum() / i, ndcgs.sum() / i, precs.sum() / i);
             }
             // Evaluate model of the current test rating:
@@ -153,8 +157,10 @@ public abstract class TopKRecommender {
             precs.set(i, res[2]);
 
             // statisitcs for break down
-            int r = trainMatrix.getRowRef(rating.userId).itemCount();
-            r = r > intervals ? intervals : r;
+            int r = trainMatrix.getRowRef(rating.userId).itemCount();//userId在train里面不为0的数量
+//            r = r > intervals ? intervals : r;//取小
+
+            r = r > intervals * times ? intervals : r / times;//todo 修改过
             counts[r] += 1;
             hits_r[r] += res[0];
             ndcgs_r[r] += res[1];
@@ -165,12 +171,14 @@ public abstract class TopKRecommender {
             updateModel(rating.userId, rating.itemId);
             updateTime += (System.currentTimeMillis() - start);
         }
-
+        System.out.printf(new Date() + "\t%d: <hr, ndcg, prec> =\t %.4f\t %.4f\t %.4f\n",
+                testCount, hits.sum() / testCount, ndcgs.sum() / testCount, precs.sum() / testCount);
         System.out.println("Break down the results by number of user ratings for the test pair.");
         System.out.printf("#Rating\t Percentage\t HR\t NDCG\t MAP\n");
         for (int i = 0; i <= intervals; i++) {
             System.out.printf("%d\t %.2f%%\t %.4f\t %.4f\t %.4f \n",
-                    i, (double) counts[i] / testCount * 100,
+//                    i, (double) counts[i] / testCount * 100,//todo 修改过
+                    i * times, (double) counts[i] / testCount * 100,
                     hits_r[i] / counts[i], ndcgs_r[i] / counts[i], precs_r[i] / counts[i]);
         }
 
@@ -189,10 +197,6 @@ public abstract class TopKRecommender {
 
     /**
      * Offline evaluation (leave-1-out) for each user.
-     *
-     * @param topK       position to cutoff
-     * @param testMatrix
-     * @throws InterruptedException
      */
     public void evaluate(ArrayList<Rating> testRatings) {
         assert userCount == testRatings.size();
@@ -224,7 +228,10 @@ public abstract class TopKRecommender {
     /**
      * Evaluation for a specific user with given GroundTruth item.
      *
-     * @return: result[0]: hit ratio
+     * @param u      userIndex
+     * @param gtItem groundTruth itemIndex
+     * @return evaluator results
+     * result[0]: hit ratio
      * result[1]: ndcg
      * result[2]: precision
      */
@@ -232,16 +239,16 @@ public abstract class TopKRecommender {
         double[] result = new double[3];
         HashMap<Integer, Double> map_item_score = new HashMap<Integer, Double>();
         // Get the score of the test item first.
-        double maxScore = predict(u, gtItem);
+        double maxScore = predict(u, gtItem);//user对groundTruth的预测
 
         // Early stopping if there are topK items larger than maxScore.
-        int countLarger = 0;
+        int countLarger = 0;//其他item预测的score超过groundTruth的个数
         for (int i = 0; i < itemCount; i++) {
             double score = predict(u, i);
             map_item_score.put(i, score);
 
             if (score > maxScore) countLarger++;
-            if (countLarger > topK) return result;    // early stopping
+            if (countLarger > topK) return result;    // early stopping：groundTruth没有出现在topK列表中
         }
 
         // Selecting topK items (does not exclude train items).

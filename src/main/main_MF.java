@@ -17,7 +17,8 @@ public class main_MF extends main {
 		boolean showProgress = false;
 		boolean showLoss = true;
 		int factors = 64;
-		int maxIter = 500;
+//		int maxIter = 500;
+		int maxIter = 16;
 		double reg = 0.01;
 		double alpha = 0.75;
 		
@@ -32,8 +33,8 @@ public class main_MF extends main {
 			reg = Double.parseDouble(argv[7]);
 			if (argv.length > 8) alpha = Double.parseDouble(argv[8]);
 		}
-		//ReadRatings_GlobalSplit("data/" + dataset_name + ".rating", 0.1);
-		ReadRatings_HoldOneOut("data/" + dataset_name + ".rating");
+		ReadRatings_GlobalSplit("data/" + dataset_name + ".rating", 0.2);
+//		ReadRatings_HoldOneOut("data/" + dataset_name + ".rating");
 		
 		System.out.printf("%s: showProgress=%s, factors=%d, maxIter=%d, reg=%f, w0=%.2f, alpha=%.2f\n",
 				method, showProgress, factors, maxIter, reg, w0, alpha);
