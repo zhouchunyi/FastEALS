@@ -10,14 +10,12 @@ import java.util.ArrayList;
 import java.util.Date;
 
 /**
- * Fast ALS for weighted matrix factorization (with imputation)
- *
- * @author Chunyi Zhou修改项：
- *         （1）将reg规格化参数具体分为了regUser和regItem；
- *         （2）***添加了参数设置部分；
- *         （3）confidence计算时的alpha参数可设置。
+ * 修改MF_fastALS_WRMF
+ * (1)confidence在线更新：过去confidence仅在init中设置，后期不更新
+ * (2)online更新的逻辑需要重写，bandit-like方式。当前每次都利用groundTruth更新
+ * Created by zcy on 2018/5/10.
  */
-public class MF_fastALS_WRMF extends TopKRecommender {
+public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
     /**
      * Model priors to set.
      */
@@ -76,11 +74,10 @@ public class MF_fastALS_WRMF extends TopKRecommender {
     // 3.weight of new instance in online learning
     public double w_new = 1;
 
-
-    public MF_fastALS_WRMF(SparseMatrix trainMatrix, ArrayList<Rating> testRatings,
-                           int topK, int threadNum, int factors, int maxIter, double c0, float alpha, double regUser, double regItem,
-                           double init_mean, double init_stdev, boolean showProgress, boolean showLoss) {
-        super(trainMatrix, testRatings, topK, threadNum);
+    public MF_fastALS_WRMFonline(SparseMatrix trainMatrix, ArrayList<Rating> testRatings,
+                                 int topK, int factors, int maxIter, double c0, float alpha, double regUser, double regItem,
+                                 double init_mean, double init_stdev, boolean showProgress, boolean showLoss) {
+        super(trainMatrix, testRatings, topK);
         this.factors = factors;
         this.maxIter = maxIter;
         this.c0 = c0;
@@ -98,8 +95,7 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         long start = System.currentTimeMillis();
         System.out.println(new Date() + "\t" + method_name + " weights and confidences init start.");
         initConfidencesAndWeights();
-        System.out.println(new Date() + "\t" + method_name + " weights and confidences init end." + Printer.printTime(start - System.currentTimeMillis()));
-
+        System.out.println(new Date() + "\t" + method_name + " weights and confidences init end."+Printer.printTime(start - System.currentTimeMillis()));
 
         // Init caches
         prediction_users = new double[userCount];
@@ -118,9 +114,9 @@ public class MF_fastALS_WRMF extends TopKRecommender {
     }
 
     /**
-     * todo 根据WRMFJudge不同，对weights和confidencs给予不同赋值
+     * todo 经过一定轮次后更新参数？
      */
-    private void initConfidencesAndWeights() {
+    public void initConfidencesAndWeights() {
         /**
          * Confidences Computation
          */
@@ -173,7 +169,6 @@ public class MF_fastALS_WRMF extends TopKRecommender {
                 }
             }
         }
-
         if (WRMFJudge == 3) {//还原confidence，此种情况下的confidence仅用于计算新w_ui
             for (int i = 0; i < itemCount; i++) {
                 confidences[i] = 1;
@@ -181,16 +176,6 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         }
     }
 
-
-    public void setTrain(SparseMatrix trainMatrix) {
-        this.trainMatrix = new SparseMatrix(trainMatrix);
-        weights = new SparseMatrix(userCount, itemCount);
-        for (int u = 0; u < userCount; u++)
-            for (int i : this.trainMatrix.getRowRef(u).indexList())
-                weights.setValue(u, i, 1);
-    }
-
-    // Init SU and SV
     private void initS() {
         SU = U.transpose().mult(U);
         // Init SV as V^T confidences V
@@ -208,53 +193,34 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         }
     }
 
-    //remove
-    public void setUV(DenseMatrix U, DenseMatrix V) {
-        this.U = U.clone();
-        this.V = V.clone();
-        initS();
+    public void showParams() {
+        System.out.println("factors=" + factors + ",\tregUser=regItem=" + regUser + ",\talpha=" + alpha + ",\tmaxIter=" + maxIter + ",\tmaxOnlineIter=" + maxIterOnline);
     }
 
-    /**
-     * for pre-training step
-     */
     @Override
-    public void buildModel() {
-        //System.out.println("Run for FastALS. ");
-        double loss_pre = Double.MAX_VALUE;
-        for (int iter = 0; iter < maxIter; iter++) {
-            Long start = System.currentTimeMillis();
-//            // Update user latent vectors
-//            for (int u = 0; u < userCount; u++) {
-//                update_user(u);
-//            }
-//
-//            // Update item latent vectors
-//            for (int i = 0; i < itemCount; i++) {
-//                update_item(i);
-//            }
-            runOneIteration();
-
-            // Show progress
-            if (showProgress)
-                showProgress(iter, start, testRatings);
-            // Show loss
-            if (showLoss)
-                loss_pre = showLoss(iter, start, loss_pre);
-
-        } // end for iter
-
+    public double predict(int u, int i) {
+        return U.row(u, false).inner(V.row(i, false));
     }
 
-    // Run model for one iteration
-    public void runOneIteration() {
-        // Update user latent vectors
-        for (int u = 0; u < userCount; u++) {
-            update_user(u);
+    @Override
+    public void updateModel(int u, int i, double reward) {
+        trainMatrix.setValue(u, i, reward);
+        weights.setValue(u, i, w_new);
+
+        if (confidences[i] == 0) { // an new item
+            confidences[i] = c0 / itemCount;//todo 既然是new item，那么itemCount是不是应该用currentItemCount？
+            // Update the SV cache
+            for (int f = 0; f < factors; f++) {
+                for (int k = 0; k <= f; k++) {
+                    double val = SV.get(f, k) + V.get(i, f) * V.get(i, k) * confidences[i];
+                    SV.set(f, k, val);
+                    SV.set(k, f, val);
+                }
+            }
         }
 
-        // Update item latent vectors
-        for (int i = 0; i < itemCount; i++) {
+        for (int iter = 0; iter < maxIterOnline; iter++) {
+            update_user(u);
             update_item(i);
         }
     }
@@ -373,6 +339,30 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         }
     }
 
+    @Override
+    public void buildModel() {
+        double loss_pre = Double.MAX_VALUE;
+        for (int iter = 0; iter < maxIter; iter++) {
+            Long start = System.currentTimeMillis();
+            // Update user latent vectors
+            for (int u = 0; u < userCount; u++) {
+                update_user(u);
+            }
+
+            // Update item latent vectors
+            for (int i = 0; i < itemCount; i++) {
+                update_item(i);
+            }
+            // Show progress
+            if (showProgress)
+                showProgress(iter, start, testRatings);
+            // Show loss
+            if (showLoss)
+                loss_pre = showLoss(iter, start, loss_pre);
+
+        }
+    }
+
     public double showLoss(int iter, long start, double loss_pre) {
         long start1 = System.currentTimeMillis();
         double loss_cur = loss();
@@ -382,72 +372,4 @@ public class MF_fastALS_WRMF extends TopKRecommender {
                 Printer.printTime(System.currentTimeMillis() - start1));
         return loss_cur;
     }
-
-    // Fast way to calculate the loss function
-    public double loss() {
-//        double L = reg * (U.squaredSum() + V.squaredSum());
-        double L = regUser * U.squaredSum() + regItem * V.squaredSum();
-        for (int u = 0; u < userCount; u++) {
-            double l = 0;
-            for (int i : trainMatrix.getRowRef(u).indexList()) {
-                double pred = predict(u, i);
-                l += weights.getValue(u, i) * Math.pow(trainMatrix.getValue(u, i) - pred, 2);
-                l -= confidences[i] * Math.pow(pred, 2);
-            }
-            l += SV.mult(U.row(u, false)).inner(U.row(u, false));
-            L += l;
-        }
-
-        return L;
-    }
-
-    @Override
-    public double predict(int u, int i) {
-        return U.row(u, false).inner(V.row(i, false));
-    }
-
-    @Override
-    public void updateModel(int u, int i) {
-        trainMatrix.setValue(u, i, 1);
-        weights.setValue(u, i, w_new);
-
-        if (confidences[i] == 0) { // an new item
-            confidences[i] = c0 / itemCount;
-            // Update the SV cache
-            for (int f = 0; f < factors; f++) {
-                for (int k = 0; k <= f; k++) {
-                    double val = SV.get(f, k) + V.get(i, f) * V.get(i, k) * confidences[i];
-                    SV.set(f, k, val);
-                    SV.set(k, f, val);
-                }
-            }
-        }
-
-        for (int iter = 0; iter < maxIterOnline; iter++) {
-            update_user(u);
-            update_item(i);
-        }
-    }
-
-    public void showParams() {
-        System.out.println("WRMFJudge=" + WRMFJudge + ",\tfactors=" + factors + ",\tregUser=regItem=" + regUser + ",\talpha=" + alpha + ",\tmaxIter=" + maxIter + ",\tmaxOnlineIter=" + maxIterOnline);
-    }
-
-/*	// Raw way to calculate the loss function
-    public double loss() {
-		double L = reg * (U.squaredSum() + V.squaredSum());
-		for (int u = 0; u < userCount; u ++) {
-			double l = 0;
-			for (int i : trainMatrix.getRowRef(u).indexList()) {
-				l += Math.pow(trainMatrix.getValue(u, i) - predict(u, i), 2);
-			}
-			l *= (1 - c0);
-			for (int i = 0; i < itemCount; i ++) {
-				l += c0 * Math.pow(predict(u, i), 2);
-			}
-			L += l;
-		}
-		return L;
-	} */
 }
-

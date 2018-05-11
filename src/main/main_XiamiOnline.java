@@ -1,7 +1,7 @@
 package main;
 
-import algorithms.ItemPopularity;
 import algorithms.MF_fastALS_WRMF;
+import algorithms.MF_fastALS_WRMFonline;
 import algorithms.TopKRecommender;
 import utils.Printer;
 
@@ -14,61 +14,65 @@ import java.util.Date;
  * Created by zcy on 2018/5/9.
  */
 public class main_XiamiOnline extends main_XiamiBase {
-//    public static void main(String[] args) throws IOException, ParseException {
-//        String dataset_folderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\dataBy3KUser_老用户";
+    public static void xnh_onlineMain() throws IOException, ParseException {
+        String dataset_folderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\dataBy3KUser_老用户";
+
+        String dataset_trainFilePath = String.valueOf(Paths.get(dataset_folderPath, "TrainData", "trainPair3KUser.txt"));
+        String dataset_testFolderPath = String.valueOf(Paths.get(dataset_folderPath, "TestData_online"));
+//        String dataset_folderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\郑光煜实验数据\\dataBy100users_FastEALS";
 //
-//        String dataset_trainFilePath = String.valueOf(Paths.get(dataset_folderPath, "TrainData", "trainPair3KUser.txt"));
-//        String dataset_testFolderPath = String.valueOf(Paths.get(dataset_folderPath, "TestData_online"));
+//        String dataset_trainFilePath = String.valueOf(Paths.get(dataset_folderPath, "100UserTrain.txt"));
+//        String dataset_testFolderPath = String.valueOf(Paths.get(dataset_folderPath, "test_online"));
+
+        int interval = 10000;
+        double c0 = 512;//128
+        int factors = 64;
+        int maxIter = 32;
+        int maxIterOnline = 1;
+        float alpha = 0.4f;
+        String onlineMode = "ui";
+        double w_new = 1;
+
+//        readAndConvertRecords(dataset_trainFilePath, dataset_testFolderPath, true, 0.1);
+        readAndConvertRecords(dataset_trainFilePath, dataset_testFolderPath, false, 0);//不人为新增newUser
 //
-//        String method = "FastALS_WRMF";
-//        int interval = 10000;
-//        double c0 = 512;//128
-//        int factors = 64;
-//        int maxIter = 50;
-//        int maxIterOnline = 1;
-//        float alpha = 0.4f;
-//        String onlineMode = "ui";
-//        double w_new = 1;
-//
-////        readAndConvertRecords(dataset_trainFilePath, dataset_testFolderPath, true, 0.1);
-//        readAndConvertRecords(dataset_trainFilePath, dataset_testFolderPath, false, 0);//不人为新增newUser
-////
-////        ItemPopularity popularity = new ItemPopularity(trainMatrix, testRecords, topK, threadNum);
-////        evaluate_model_online(popularity, "Popularity", interval);//import from main.java
-//
-//        double init_mean = 0;
-//        double init_stdev = 0.01;
-//        double reg = 0.01;
-//        boolean showProgress = false;
-//        boolean showLoss = false;
-//
-////        if (method.equalsIgnoreCase("fastals")) {
-////            MF_fastALS fals = new MF_fastALS(trainMatrix, testRecords, topK, threadNum,
-////                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
-////            fals.w_new = w_new;
-////            long start = System.currentTimeMillis();
-////            System.out.println("train start!");
-////            fals.buildModel();
-////            System.out.println("train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
-////            fals.maxIterOnline = maxIterOnline;
-////            evaluate_model_online(fals, "MF_fastALS", interval);
-////        }
-//        if (method.equalsIgnoreCase("fastals_wrmf")) {
-//            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, topK, threadNum, factors, maxIter, c0,
-//                    alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
-//            fals_wrmf.w_new = w_new;
-//            fals_wrmf.showParams();
+//        ItemPopularity popularity = new ItemPopularity(trainMatrix, testRecords, topK, threadNum);
+//        evaluate_model_online(popularity, "Popularity", interval);//import from main.java
+
+        double init_mean = 0;
+        double init_stdev = 0.01;
+        double reg = 0.1;
+        boolean showProgress = false;
+        boolean showLoss = false;
+
+//        if (method.equalsIgnoreCase("fastals")) {
+//            MF_fastALS fals = new MF_fastALS(trainMatrix, testRecords, topK, threadNum,
+//                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
+//            fals.w_new = w_new;
 //            long start = System.currentTimeMillis();
-//            System.out.println(new Date() + "\tfastals_wrmf train starts.");
-//            fals_wrmf.buildModel();
-//            System.out.println(new Date() + "\tfastals_wrmf train ends. Train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
-//            fals_wrmf.maxIterOnline = maxIterOnline;
-//            evaluate_model_online(fals_wrmf, fals_wrmf.method_name, interval);
+//            System.out.println("train start!");
+//            fals.buildModel();
+//            System.out.println("train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
+//            fals.maxIterOnline = maxIterOnline;
+//            evaluate_model_online(fals, "MF_fastALS", interval);
 //        }
-//    }
+        int[] WRMFJudge = {3, 1, 2, 0};
+        for (int judge : WRMFJudge) {
+            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, topK, threadNum, factors, maxIter, c0,
+                    alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
+            fals_wrmf.w_new = w_new;
+            fals_wrmf.WRMFJudge = judge;
+            fals_wrmf.showParams();
+            long start = System.currentTimeMillis();
+            System.out.println(new Date() + "\tfastals_wrmf train starts.");
+            fals_wrmf.buildModel();
+            System.out.println(new Date() + "\tfastals_wrmf train ends. Train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
+            fals_wrmf.maxIterOnline = maxIterOnline;
+            evaluate_model_online(fals_wrmf, fals_wrmf.method_name, interval);
+        }
+    }
 
     private static void evaluate_model_online(TopKRecommender model, String name, int interval) {
-//        System.out.println("evaluate online!");
         long start = System.currentTimeMillis();
         model.evaluateOnline(testRecords, interval);
         System.out.printf("%s\t <hr, ndcg, prec>:\t %.4f\t %.4f\t %.4f [%s]\n",
@@ -77,10 +81,12 @@ public class main_XiamiOnline extends main_XiamiBase {
     }
 
     public static void main(String[] args) throws IOException, ParseException {
-        tuningMain();
+//        xnh_tuningMain();
+//        banditLikeMain();
+        xnh_onlineMain();
     }
 
-    public static void tuningMain() throws IOException, ParseException {
+    public static void xnh_tuningMain() throws IOException, ParseException {
         String dataset_folderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\dataBy3KUser_老用户";
 
         String dataset_trainFilePath = String.valueOf(Paths.get(dataset_folderPath, "TrainData", "trainPair3KUser.txt"));
@@ -126,6 +132,48 @@ public class main_XiamiOnline extends main_XiamiBase {
                             evaluate_model_online(fals_wrmf, fals_wrmf.method_name, interval);
                             System.out.println("===============================================================\n");
                         }
+
+    }
+
+    public static void banditLikeMain() throws IOException, ParseException {
+//        String dataset_folderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\dataBy3KUser_老用户";
+//
+//        String dataset_trainFilePath = String.valueOf(Paths.get(dataset_folderPath, "TrainData", "trainPair3KUser.txt"));
+//        String dataset_testFolderPath = String.valueOf(Paths.get(dataset_folderPath, "TestData_online"));
+        String dataset_folderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\郑光煜实验数据\\dataBy100users_FastEALS";
+
+        String dataset_trainFilePath = String.valueOf(Paths.get(dataset_folderPath, "100UserTrain.txt"));
+        String dataset_testFolderPath = String.valueOf(Paths.get(dataset_folderPath, "test_online"));
+
+        int interval = 10000;
+        double c0 = 512;//128
+        int factors = 64;
+        int maxIter = 5;
+        int maxIterOnline = 1;
+        float alpha = 0.4f;
+        String onlineMode = "ui";
+        double w_new = 1;
+        readAndConvertRecords(dataset_trainFilePath, dataset_testFolderPath, false, 0);//不人为新增newUser
+        double init_mean = 0;
+        double init_stdev = 0.01;
+        double reg = 0.01;
+        boolean showProgress = false;
+        boolean showLoss = false;
+        MF_fastALS_WRMFonline fals_wrmf = new MF_fastALS_WRMFonline(trainMatrix, testRecords, topK, factors, maxIter, c0,
+                alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
+        fals_wrmf.w_new = w_new;
+        fals_wrmf.showParams();
+        long start = System.currentTimeMillis();
+        System.out.println(new Date() + "\tfastals_wrmf_online train starts.");
+        fals_wrmf.buildModel();
+        System.out.println(new Date() + "\tfastals_wrmf_online train ends. Train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
+        fals_wrmf.maxIterOnline = maxIterOnline;
+
+        long evalStart = System.currentTimeMillis();
+        fals_wrmf.evaluateOnline(testRecords, interval);
+        System.out.printf("%s\t <hit>:\t %.4f\t [%s]\n",
+                fals_wrmf.method_name, fals_wrmf.hits.mean(),
+                Printer.printTime(System.currentTimeMillis() - evalStart));
 
     }
 }

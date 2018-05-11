@@ -168,7 +168,7 @@ public abstract class TopKRecommender {
 
             // Update the model
             Long start = System.currentTimeMillis();
-            updateModel(rating.userId, rating.itemId);
+            updateModel(rating.userId, rating.itemId);//利用groundTruth进行update
             updateTime += (System.currentTimeMillis() - start);
         }
         System.out.printf(new Date() + "\t%d: <hr, ndcg, prec> =\t %.4f\t %.4f\t %.4f\n",
