@@ -93,10 +93,12 @@ public class main_XiamiBase {
         int userIdx, itemIdx;
         //build train
         System.out.println(new Date() + "\tbuilding train-dataset start.");
-        //由于train部分和timestamp先后没有关联，因此直接输入三元组
+        /**
+         * 由于train部分和timestamp先后没有关联，因此直接输入三元组
+         */
         reader = new BufferedReader(new InputStreamReader(new FileInputStream(trainTripleFile)));
         ArrayList<Rating> trainList = new ArrayList<>();//temp var
-        start = System.currentTimeMillis();
+//        start = System.currentTimeMillis();
         while ((line = reader.readLine()) != null) {
             //userId \t itemId \t freq
             splitRes = line.split(" ");//todo trainPair文件用空格分
@@ -107,8 +109,6 @@ public class main_XiamiBase {
         }
         trainUserCount = convertor.getUserNum();
         System.out.println(new Date() + "\tbuilding train-dataset ends.");
-//        System.out.println("after reading trainFile, trainUserCount = " + trainUserCount);
-//        System.out.println("Reading trainFile costs :" + Printer.printTime(System.currentTimeMillis() - start));
 
         String userId;
         long timestamp;
@@ -122,8 +122,8 @@ public class main_XiamiBase {
         //build test
         System.out.println(new Date() + "\tbuilding test-dataset start.");
         newUserIdxList = new ArrayList<>();
-        /*
-        testFolder的名字为<userId>.txt，因此test中无重复userId
+        /**
+         testFolder的名字为<userId>.txt，因此test中无重复userId
          */
         start = System.currentTimeMillis();
         for (File testUserFile : testFolder.listFiles()) {

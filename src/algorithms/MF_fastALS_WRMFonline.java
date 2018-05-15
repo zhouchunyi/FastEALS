@@ -71,10 +71,11 @@ public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
     private SparseMatrix weights;
     // 2.weight for negative instances on item i.==> confidence that item i missed by users
     private double[] confidences;//原代码参数名为Wi
+    private double[] confidences_cache;//for WRMFJudge=3
     // 3.weight of new instance in online learning
-    public double w_new = 1;
+    public double w_init = 1;
 
-    public MF_fastALS_WRMFonline(SparseMatrix trainMatrix, ArrayList<Rating> testRatings,
+    public MF_fastALS_WRMFonline(SparseMatrix trainMatrix, ArrayList<Rating> testRatings, int WRMFJudge,
                                  int topK, int factors, int maxIter, double c0, float alpha, double regUser, double regItem,
                                  double init_mean, double init_stdev, boolean showProgress, boolean showLoss) {
         super(trainMatrix, testRatings, topK);
@@ -88,14 +89,16 @@ public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
         this.showLoss = showLoss;
         this.showProgress = showProgress;
         this.alpha = alpha;
+        this.WRMFJudge = WRMFJudge;
 
         /**
          * new weights and confidences setting
+         * 必须先设置WRMFJudge，不然initConfidencesAndWeights是错误的
          */
         long start = System.currentTimeMillis();
         System.out.println(new Date() + "\t" + method_name + " weights and confidences init start.");
         initConfidencesAndWeights();
-        System.out.println(new Date() + "\t" + method_name + " weights and confidences init end."+Printer.printTime(start - System.currentTimeMillis()));
+        System.out.println(new Date() + "\t" + method_name + " weights and confidences init end." + Printer.printTime(start - System.currentTimeMillis()));
 
         // Init caches
         prediction_users = new double[userCount];
@@ -114,14 +117,15 @@ public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
     }
 
     /**
-     * todo 经过一定轮次后更新参数？
+     * todo 根据WRMFJudge不同，对weights和confidencs给予不同赋值
      */
-    public void initConfidencesAndWeights() {
+    private void initConfidencesAndWeights() {
         /**
          * Confidences Computation
          */
         confidences = new double[itemCount];
         if (WRMFJudge == 0 || WRMFJudge == 2 || WRMFJudge == 3) {// for missing data (zero part)
+
             /**
              * c_i = c_0*{f^alpha_i/SUM[all items]{f^alpha_j}}
              * alphaPopularity_i = f^alpha_i = |R_i|
@@ -140,12 +144,22 @@ public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
                 p[i] = Math.pow(p[i], alpha);
                 Z += p[i];
             }
+            /**
+             * new item confidence==0
+             */
 //             assign weight
-            confidences = new double[itemCount];
-            for (int i = 0; i < itemCount; i++)
-                confidences[i] = c0 * p[i] / Z;
+            if (WRMFJudge == 0 || WRMFJudge == 2) {
+                for (int i = 0; i < itemCount; i++)
+                    confidences[i] = c0 * p[i] / Z;
+            } else {//WRMFJudge==3
+                confidences_cache = new double[itemCount];
+                for (int i = 0; i < itemCount; i++)
+                    confidences_cache[i] = c0 * p[i] / Z;
+            }
 
-        } else {//对missing部分不做处理，confidence都设置为1
+        }
+
+        if (WRMFJudge == 1 || WRMFJudge == 3) {//对missing部分不做处理，confidence都设置为1
             for (int i = 0; i < itemCount; i++) {
                 confidences[i] = 1;
             }
@@ -158,23 +172,20 @@ public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
         // By default, the weight for positive instance is uniformly 1.
         for (int u = 0; u < userCount; u++) {
             for (int i : trainMatrix.getRowRef(u).indexList()) {
-                if (WRMFJudge == 1 || WRMFJudge == 2) {
+                if (WRMFJudge == 1 || WRMFJudge == 2 || WRMFJudge == 3) {
                     weights.setValue(u, i, 1.0 + Math.log(1.0 + Math.pow(10, weightCoefficient)) * trainMatrix.getValue(u, i));
-                } else {
-                    weights.setValue(u, i, 1.0);
+                } else {//only missing part
+                    weights.setValue(u, i, w_init);
                 }
                 if (WRMFJudge == 3) {
                     //todo 在WRMF基础上，将计算的confidence加在w_ui上
-                    weights.setValue(u, i, weights.getValue(u, i) * confidences[i]);
+                    //这里是non-zero部分，因此confidence均不为0
+                    weights.setValue(u, i, weights.getValue(u, i) * confidences_cache[i]);
                 }
             }
         }
-        if (WRMFJudge == 3) {//还原confidence，此种情况下的confidence仅用于计算新w_ui
-            for (int i = 0; i < itemCount; i++) {
-                confidences[i] = 1;
-            }
-        }
     }
+
 
     private void initS() {
         SU = U.transpose().mult(U);
@@ -202,13 +213,39 @@ public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
         return U.row(u, false).inner(V.row(i, false));
     }
 
+    /**
+     * todo 这里改如何修改？？？
+     *
+     * @param u      current userIndex
+     * @param i      itemIndex that system recommends last round
+     * @param reward the feedback user given in this round
+     */
     @Override
     public void updateModel(int u, int i, double reward) {
+        //todo 与非bandit不同，使用reward而非固定1
         trainMatrix.setValue(u, i, reward);
-        weights.setValue(u, i, w_new);
+//        weights.setValue(u, i, w_init);
+        //WRMF=0,1,2的设置与confidence无关
+        if (reward != 0) {//todo
+            if (WRMFJudge == 1 || WRMFJudge == 2 || WRMFJudge == 3) {
+                weights.setValue(u, i, 1.0 + Math.log(1.0 + Math.pow(10, weightCoefficient)) * trainMatrix.getValue(u, i));
+            } else {//only missing part
+                weights.setValue(u, i, w_init);
+            }
+        }
 
-        if (confidences[i] == 0) { // an new item
-            confidences[i] = c0 / itemCount;//todo 既然是new item，那么itemCount是不是应该用currentItemCount？
+
+        if (confidences[i] == 0) {
+            // an new item
+            if (WRMFJudge == 0 || WRMFJudge == 2)
+                confidences[i] = c0 / itemCount;
+            else {
+                if (WRMFJudge == 3) {
+                    confidences_cache[i] = c0 / itemCount;
+                    weights.setValue(u, i, confidences_cache[i] * weights.getValue(u, i));
+                }
+                confidences[i] = 1;
+            }
             // Update the SV cache
             for (int f = 0; f < factors; f++) {
                 for (int k = 0; k <= f; k++) {
@@ -217,6 +254,9 @@ public class MF_fastALS_WRMFonline extends OnlineTopOneRecommender {
                     SV.set(k, f, val);
                 }
             }
+        } else {
+            if (WRMFJudge == 3)
+                weights.setValue(u, i, weights.getValue(u, i) * confidences_cache[i]);
         }
 
         for (int iter = 0; iter < maxIterOnline; iter++) {

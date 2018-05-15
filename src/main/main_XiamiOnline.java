@@ -1,5 +1,6 @@
 package main;
 
+import algorithms.ItemPopularity;
 import algorithms.MF_fastALS_WRMF;
 import algorithms.MF_fastALS_WRMFonline;
 import algorithms.TopKRecommender;
@@ -14,6 +15,12 @@ import java.util.Date;
  * Created by zcy on 2018/5/9.
  */
 public class main_XiamiOnline extends main_XiamiBase {
+    public static void main(String[] args) throws IOException, ParseException {
+//        xnh_tuningMain();
+//        banditLikeMain();
+        xnh_onlineMain();
+    }
+
     public static void xnh_onlineMain() throws IOException, ParseException {
         String dataset_folderPath = "D:\\音乐推荐-baseline实验\\xiami-数据处理\\dataBy3KUser_老用户";
 
@@ -45,23 +52,12 @@ public class main_XiamiOnline extends main_XiamiBase {
         boolean showProgress = false;
         boolean showLoss = false;
 
-//        if (method.equalsIgnoreCase("fastals")) {
-//            MF_fastALS fals = new MF_fastALS(trainMatrix, testRecords, topK, threadNum,
-//                    factors, maxIter, w0, alpha, reg, init_mean, init_stdev, showProgress, showLoss);
-//            fals.w_new = w_new;
-//            long start = System.currentTimeMillis();
-//            System.out.println("train start!");
-//            fals.buildModel();
-//            System.out.println("train costs\t" + Printer.printTime(start - System.currentTimeMillis()));
-//            fals.maxIterOnline = maxIterOnline;
-//            evaluate_model_online(fals, "MF_fastALS", interval);
-//        }
         int[] WRMFJudge = {3, 1, 2, 0};
+//        int[] WRMFJudge = {3};
         for (int judge : WRMFJudge) {
-            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, topK, threadNum, factors, maxIter, c0,
+            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, judge, topK, threadNum, factors, maxIter, c0,
                     alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
-            fals_wrmf.w_new = w_new;
-            fals_wrmf.WRMFJudge = judge;
+            fals_wrmf.w_init = w_new;
             fals_wrmf.showParams();
             long start = System.currentTimeMillis();
             System.out.println(new Date() + "\tfastals_wrmf train starts.");
@@ -78,12 +74,6 @@ public class main_XiamiOnline extends main_XiamiBase {
         System.out.printf("%s\t <hr, ndcg, prec>:\t %.4f\t %.4f\t %.4f [%s]\n",
                 name, model.hits.mean(), model.ndcgs.mean(), model.precs.mean(),
                 Printer.printTime(System.currentTimeMillis() - start));
-    }
-
-    public static void main(String[] args) throws IOException, ParseException {
-//        xnh_tuningMain();
-//        banditLikeMain();
-        xnh_onlineMain();
     }
 
     public static void xnh_tuningMain() throws IOException, ParseException {
@@ -113,15 +103,17 @@ public class main_XiamiOnline extends main_XiamiBase {
         int[] iters = {32, 16, 8, 64};
         int[] onlineIters = {1, 2, 5};
 
+        int WRMFJudge = 1;
+
         for (int factor : factors)
             for (int iter : iters)
                 for (double reg : regs)
                     for (float alpha : alphas)
                         for (int onlineIter : onlineIters) {
-                            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, topK, threadNum, factor, iter, c0,
+                            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, WRMFJudge, topK, threadNum, factor, iter, c0,
                                     alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
                             fals_wrmf.maxIterOnline = onlineIter;
-                            fals_wrmf.w_new = w_new;
+                            fals_wrmf.w_init = w_new;
                             fals_wrmf.showParams();
 
                             long start = System.currentTimeMillis();
@@ -159,9 +151,10 @@ public class main_XiamiOnline extends main_XiamiBase {
         double reg = 0.01;
         boolean showProgress = false;
         boolean showLoss = false;
-        MF_fastALS_WRMFonline fals_wrmf = new MF_fastALS_WRMFonline(trainMatrix, testRecords, topK, factors, maxIter, c0,
+        int WRMFJudge = 1;
+        MF_fastALS_WRMFonline fals_wrmf = new MF_fastALS_WRMFonline(trainMatrix, testRecords, WRMFJudge, topK, factors, maxIter, c0,
                 alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
-        fals_wrmf.w_new = w_new;
+        fals_wrmf.w_init = w_new;
         fals_wrmf.showParams();
         long start = System.currentTimeMillis();
         System.out.println(new Date() + "\tfastals_wrmf_online train starts.");

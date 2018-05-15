@@ -43,12 +43,12 @@ public class main_XiamiOffline extends main_XiamiBase {
 
         ItemPopularity popularity = new ItemPopularity(trainMatrix, testRecords, topK, threadNum);
         evaluate_model(popularity, "Popularity");
-
+        int WRMFJudge = 1;
 
         if (method.equalsIgnoreCase("fastals_wrmf")) {
-            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, topK, threadNum, factors, maxIter, c0,
+            MF_fastALS_WRMF fals_wrmf = new MF_fastALS_WRMF(trainMatrix, testRecords, WRMFJudge, topK, threadNum, factors, maxIter, c0,
                     alpha, reg, reg, init_mean, init_stdev, showProgress, showLoss);
-            fals_wrmf.w_new = w_new;
+            fals_wrmf.w_init = w_new;
             evaluate_model(fals_wrmf, "MF_fastALS");
         }
     }

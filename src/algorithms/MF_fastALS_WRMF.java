@@ -44,7 +44,8 @@ public class MF_fastALS_WRMF extends TopKRecommender {
      * 2: both consider zero and non-zero [this paper]
      * 3：WRMF + non-zero*popularity # 我们的尝试
      */
-    public int WRMFJudge = 1;
+
+    private int WRMFJudge = 1;
 
     /**
      * Model parameters to learn
@@ -67,17 +68,33 @@ public class MF_fastALS_WRMF extends TopKRecommender {
     public boolean showLoss;
 
     /**
+     * todo 为了观察新旧用户的推荐效果
+     * 仅出现在test中的user为newUser
+     */
+//    private boolean[] isNewUser;
+//    private boolean isTrain;
+    /**
+     * weight是否在在线update过程中随着interaction变化
+     */
+    public boolean isOnlineWeightUpdate = false;
+
+    /**
      * 权重参数
      */
     // 1.weight for each positive instance in trainMatrix => weights of all user-item pair (u,i)
     private SparseMatrix weights;
     // 2.weight for negative instances on item i.==> confidence that item i missed by users
     private double[] confidences;//原代码参数名为Wi
+    /**
+     * for WRMFJudge=3
+     * 计算时不考虑confidence，但仍需要为item计算popularity，这里利用confidence_cache
+     */
+    private double[] confidences_cache;
     // 3.weight of new instance in online learning
-    public double w_new = 1;
+    public double w_init = 1;
 
 
-    public MF_fastALS_WRMF(SparseMatrix trainMatrix, ArrayList<Rating> testRatings,
+    public MF_fastALS_WRMF(SparseMatrix trainMatrix, ArrayList<Rating> testRatings, int WRMFJudge,
                            int topK, int threadNum, int factors, int maxIter, double c0, float alpha, double regUser, double regItem,
                            double init_mean, double init_stdev, boolean showProgress, boolean showLoss) {
         super(trainMatrix, testRatings, topK, threadNum);
@@ -91,6 +108,7 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         this.showLoss = showLoss;
         this.showProgress = showProgress;
         this.alpha = alpha;
+        this.WRMFJudge = WRMFJudge;
 
         /**
          * new weights and confidences setting
@@ -112,9 +130,14 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         // Init model parameters
         U = new DenseMatrix(userCount, factors);
         V = new DenseMatrix(itemCount, factors);
+        //gaussian init
         U.init(init_mean, init_stdev);
         V.init(init_mean, init_stdev);
         initS();
+
+        //todo init newUser array => false by default
+//        isNewUser = new boolean[userCount];
+//        isTrain = true;//由于train和test部分方法有重叠
     }
 
     /**
@@ -124,8 +147,9 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         /**
          * Confidences Computation
          */
-        confidences = new double[itemCount];
-        if (WRMFJudge == 0 || WRMFJudge == 2 || WRMFJudge == 3) {// for missing data (zero part)
+        confidences = new double[itemCount];//confidence用于计算向量，而confidence_cache用于weight计算
+        confidences_cache = new double[itemCount];
+        if (WRMFJudge == 0 || WRMFJudge == 2 || WRMFJudge == 3) {
             /**
              * c_i = c_0*{f^alpha_i/SUM[all items]{f^alpha_j}}
              * alphaPopularity_i = f^alpha_i = |R_i|
@@ -136,6 +160,9 @@ public class MF_fastALS_WRMF extends TopKRecommender {
             double[] p = new double[itemCount];
             for (int i = 0; i < itemCount; i++) {
                 p[i] = trainMatrix.getColRef(i).itemCount();//trainMatrix.getColRef(i)获得第i列的Vector
+//                System.out.println("item[" + i + "]=" + p[i]);
+//                if(p[i]==0)
+//                    System.out.println("item["+i+"] is new item");
                 sum += p[i];
             }
             // convert p[i] to probability
@@ -145,11 +172,17 @@ public class MF_fastALS_WRMF extends TopKRecommender {
                 Z += p[i];
             }
 //             assign weight
-            confidences = new double[itemCount];
-            for (int i = 0; i < itemCount; i++)
-                confidences[i] = c0 * p[i] / Z;
+            if (WRMFJudge == 0 || WRMFJudge == 2) {
+                for (int i = 0; i < itemCount; i++)
+                    confidences[i] = c0 * p[i] / Z;
+            } else {//WRMFJudge==3
+                for (int i = 0; i < itemCount; i++)
+                    confidences_cache[i] = c0 * p[i] / Z;
+            }
 
-        } else {//对missing部分不做处理，confidence都设置为1
+        }
+
+        if (WRMFJudge == 1 || WRMFJudge == 3) {//对missing部分不做处理，confidence都设置为1
             for (int i = 0; i < itemCount; i++) {
                 confidences[i] = 1;
             }
@@ -157,26 +190,22 @@ public class MF_fastALS_WRMF extends TopKRecommender {
 
         /**
          * Weights Computation
+         * 仅对有数据的部分
          */
         weights = new SparseMatrix(userCount, itemCount);
         // By default, the weight for positive instance is uniformly 1.
         for (int u = 0; u < userCount; u++) {
             for (int i : trainMatrix.getRowRef(u).indexList()) {
-                if (WRMFJudge == 1 || WRMFJudge == 2) {
+                if (WRMFJudge == 1 || WRMFJudge == 2 || WRMFJudge == 3) {
                     weights.setValue(u, i, 1.0 + Math.log(1.0 + Math.pow(10, weightCoefficient)) * trainMatrix.getValue(u, i));
-                } else {
-                    weights.setValue(u, i, 1.0);
+                } else {//only missing part
+                    weights.setValue(u, i, w_init);
                 }
                 if (WRMFJudge == 3) {
                     //todo 在WRMF基础上，将计算的confidence加在w_ui上
-                    weights.setValue(u, i, weights.getValue(u, i) * confidences[i]);
+                    //这里是non-zero部分，因此confidence均不为0
+                    weights.setValue(u, i, weights.getValue(u, i) * confidences_cache[i]);
                 }
-            }
-        }
-
-        if (WRMFJudge == 3) {//还原confidence，此种情况下的confidence仅用于计算新w_ui
-            for (int i = 0; i < itemCount; i++) {
-                confidences[i] = 1;
             }
         }
     }
@@ -224,15 +253,6 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         double loss_pre = Double.MAX_VALUE;
         for (int iter = 0; iter < maxIter; iter++) {
             Long start = System.currentTimeMillis();
-//            // Update user latent vectors
-//            for (int u = 0; u < userCount; u++) {
-//                update_user(u);
-//            }
-//
-//            // Update item latent vectors
-//            for (int i = 0; i < itemCount; i++) {
-//                update_item(i);
-//            }
             runOneIteration();
 
             // Show progress
@@ -244,6 +264,8 @@ public class MF_fastALS_WRMF extends TopKRecommender {
 
         } // end for iter
 
+        //todo 训练结束
+//        isTrain = false;
     }
 
     // Run model for one iteration
@@ -262,7 +284,13 @@ public class MF_fastALS_WRMF extends TopKRecommender {
     protected void update_user(int u) {
         //获取u在trainMatrix的行中非零项
         ArrayList<Integer> itemList = trainMatrix.getRowRef(u).indexList();
-        if (itemList.size() == 0) return;    // user has no ratings
+        if (itemList.size() == 0) return;    // user has no ratings => new user
+//        if (itemList.size() == 0) {
+//            if (isTrain && !isNewUser[u]) {
+//                isNewUser[u] = true;
+//            }
+//            return;
+//        }
         // prediction cache for the user =>为什么这个要抽出来放在前面，放在下面的foreach in itemList中不行吗？
         for (int i : itemList) {
             prediction_items[i] = predict(u, i);//p_u*q_i=>预测值
@@ -406,13 +434,33 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         return U.row(u, false).inner(V.row(i, false));
     }
 
+    /**
+     * todo 根据WRMFJudge不同，对weights和confidencs给予不同赋值
+     * 过去仅处理了eals情况：weights.setValue(u, i, w_init)，之前的方法忘记修改了
+     */
     @Override
     public void updateModel(int u, int i) {
         trainMatrix.setValue(u, i, 1);
-        weights.setValue(u, i, w_new);
+//        weights.setValue(u, i, w_init);
+        /**
+         * new iteraction => weight至多为1
+         */
+        if (WRMFJudge == 1 || WRMFJudge == 2 || WRMFJudge == 3) {
+            if (weights.getValue(u, i) == 0 || isOnlineWeightUpdate)
+                weights.setValue(u, i, 1.0 + Math.log(1.0 + Math.pow(10, weightCoefficient)) * trainMatrix.getValue(u, i));
+            //else 暂时用不到
+        } else {//WRMFJudge == 0: 无论是否为新interaction
+            weights.setValue(u, i, w_init);
+        }
 
-        if (confidences[i] == 0) { // an new item
-            confidences[i] = c0 / itemCount;
+
+        /**
+         * 仅当WRMFJudge为0和2时，才起作用，其他设置为1
+         */
+        if (confidences[i] == 0) {// an new item
+//            System.out.println("item[" + i + "] is a new item");
+//            if (WRMFJudge == 0 || WRMFJudge == 2)
+            confidences[i] = c0 / itemCount;//todo ?? 在推荐过程中怎么能知道总itemCount？？
             // Update the SV cache
             for (int f = 0; f < factors; f++) {
                 for (int k = 0; k <= f; k++) {
@@ -421,6 +469,9 @@ public class MF_fastALS_WRMF extends TopKRecommender {
                     SV.set(k, f, val);
                 }
             }
+        } else if (confidences_cache != null && confidences_cache[i] == 0) {//WRMF == 3
+            confidences_cache[i] = c0 / itemCount;
+            weights.setValue(u, i, confidences_cache[i] * weights.getValue(u, i));
         }
 
         for (int iter = 0; iter < maxIterOnline; iter++) {
@@ -429,25 +480,22 @@ public class MF_fastALS_WRMF extends TopKRecommender {
         }
     }
 
-    public void showParams() {
-        System.out.println("WRMFJudge=" + WRMFJudge + ",\tfactors=" + factors + ",\tregUser=regItem=" + regUser + ",\talpha=" + alpha + ",\tmaxIter=" + maxIter + ",\tmaxOnlineIter=" + maxIterOnline);
+    /**
+     * 当修改了WRMFJudge参数时，需要重新计算confidence和weight
+     *
+     * @param WRMFJudge
+     */
+    public void setWRMFJudge(int WRMFJudge) {
+        if (this.WRMFJudge == WRMFJudge)
+            return;
+        this.WRMFJudge = WRMFJudge;
+        initConfidencesAndWeights();
     }
 
-/*	// Raw way to calculate the loss function
-    public double loss() {
-		double L = reg * (U.squaredSum() + V.squaredSum());
-		for (int u = 0; u < userCount; u ++) {
-			double l = 0;
-			for (int i : trainMatrix.getRowRef(u).indexList()) {
-				l += Math.pow(trainMatrix.getValue(u, i) - predict(u, i), 2);
-			}
-			l *= (1 - c0);
-			for (int i = 0; i < itemCount; i ++) {
-				l += c0 * Math.pow(predict(u, i), 2);
-			}
-			L += l;
-		}
-		return L;
-	} */
+
+    public void showParams() {
+        System.out.println("WRMFJudge=" + WRMFJudge + ",\tisOnlineWeightUpdate=" + isOnlineWeightUpdate + ",\tfactors=" + factors + ",\tregUser=regItem=" + regUser + ",\talpha=" + alpha + ",\tmaxIter=" + maxIter + ",\tmaxOnlineIter=" + maxIterOnline);
+    }
+
 }
 
